@@ -1,104 +1,137 @@
-from flask import Flask, render_template, request, jsonify
+import base64
+import os
+import time
+
 import requests
-import re
+from dotenv import load_dotenv
+from flask import Flask, jsonify, render_template, request
+
+load_dotenv()  # loads credentials from the .env file
 
 app = Flask(__name__)
 
-# Ship24 Official API Key for Project / TL Verification
-OFFICIAL_API_KEY = "apik_YDORnacfMpP6q3X3LeB2ps7vxs9N3q"
+# UPS API credentials are read from environment variables (.env file)
+UPS_CLIENT_ID = os.getenv("UPS_CLIENT_ID")
+UPS_CLIENT_SECRET = os.getenv("UPS_CLIENT_SECRET")
 
-def is_valid_ups_format(tracking_number):
-    pattern = r'^1Z[A-Z0-9]{16}$'
-    if re.match(pattern, tracking_number):
-        return True
-    if tracking_number.isdigit() and len(tracking_number) in [9, 10, 11, 12]:
-        return True
-    return False
+# Production endpoints (for the sandbox, replace "onlinetools" with "wwwcie")
+TOKEN_URL = "https://onlinetools.ups.com/security/v1/oauth/token"
+TRACK_URL = "https://onlinetools.ups.com/api/track/v1/details/"
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+token_cache = {
+    "access_token": None,
+    "expires_at": 0
+}
 
-@app.route('/track', methods=['POST'])
-def track():
-    tracking_number = request.form.get('tracking_number', '').strip().upper()
 
-    # 1. Validation Checks
-    if not tracking_number:
-        return jsonify({
-            "success": False,
-            "status_code": 400,
-            "message": "Tracking ID is required."
-        }), 400
+def get_ups_token():
+    """Fetch a Bearer token using the OAuth 2.0 Client Credentials flow."""
+    now = time.time()
+    if token_cache["access_token"] and now < token_cache["expires_at"]:
+        return token_cache["access_token"], 200
 
-    if not is_valid_ups_format(tracking_number):
-        return jsonify({
-            "success": False,
-            "status_code": 404,
-            "message": f"Tracking number '{tracking_number}' not recognized by UPS. Format requires '1Z' followed by 16 alphanumeric characters."
-        }), 404
+    if not UPS_CLIENT_ID or not UPS_CLIENT_SECRET:
+        return None, 500
 
-    # 2. Live Direct Carrier Synced Gateway
-    session = requests.Session()
+    creds = f"{UPS_CLIENT_ID}:{UPS_CLIENT_SECRET}"
+    encoded = base64.b64encode(creds.encode()).decode()
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": "https://parcelsapp.com/en/tracking/",
-        "X-Authorization-Token": OFFICIAL_API_KEY
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": f"Basic {encoded}"
+    }
+    payload = {"grant_type": "client_credentials"}
+
+    try:
+        res = requests.post(TOKEN_URL, headers=headers, data=payload, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            token_cache["access_token"] = data.get("access_token")
+            token_cache["expires_at"] = now + int(data.get("expires_in", 3600)) - 300
+            return token_cache["access_token"], 200
+        return None, res.status_code
+    except requests.exceptions.RequestException:
+        return None, 500
+
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/track", methods=["POST"])
+def track():
+    tracking_number = request.form.get("tracking_number", "").strip()
+
+    if not tracking_number:
+        return jsonify({"success": False, "status_code": 400, "message": "Tracking number is required."}), 400
+
+    token, token_status = get_ups_token()
+    if not token:
+        return jsonify({
+            "success": False,
+            "status_code": token_status,
+            "message": f"Authentication failed (HTTP {token_status}). Verify UPS credentials."
+        }), token_status
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "transId": f"track_{int(time.time())}",
+        "transactionSrc": "UPS_Live_Tracker"
     }
 
     try:
-        url = "https://parcelsapp.com/api/v2/parcels"
-        payload = {
-            "trackingId": tracking_number,
-            "carrier": "UPS",
-            "language": "en"
-        }
-        res = session.post(url, json=payload, headers=headers, timeout=12)
-        data = res.json()
+        res = requests.get(f"{TRACK_URL}{tracking_number}", headers=headers, timeout=12)
+        status_code = res.status_code
 
-        states = data.get("states", [])
+        if status_code == 200:
+            data = res.json()
+            shipment = data.get("trackResponse", {}).get("shipment", [{}])[0]
+            package = shipment.get("package", [{}])[0]
 
-        # Real updates extract seigirom
-        history = []
-        for st in states:
-            history.append({
-                "status": st.get("carrierStatus") or st.get("status") or "Carrier Milestone Scan",
-                "location": st.get("location") or "UPS Facility",
-                "date": st.get("date") or "Verified"
-            })
+            current_status = package.get("currentStatus", {}).get("description", "In Transit")
 
-        raw_status = data.get("status") or (states[0].get("status") if states else None)
+            # Delivery date parsing
+            delivery_date = package.get("deliveryDate", [{}])[0].get("date", "")
+            delivery_time = package.get("deliveryTime", {}).get("endTime", "")
+            expected_delivery = f"{delivery_date} {delivery_time}".strip() or "Standard Transit Schedule"
 
-        if raw_status or states:
-            is_delivered = "delivered" in str(raw_status).lower()
-            current_loc = states[0].get("location") if states else "Destination Delivery Area"
-            eta = "Delivered Successfully" if is_delivered else (data.get("eta") or "Scheduled as per official UPS delivery")
-            recipient = data.get("signedBy") or ("Signature on File" if is_delivered else "In Transit")
+            activity_raw = package.get("activity", [])
+            history = []
+            current_location = "UPS Facility"
+
+            for i, act in enumerate(activity_raw):
+                city = act.get("location", {}).get("address", {}).get("city", "")
+                country = act.get("location", {}).get("address", {}).get("countryCode", "")
+                loc_str = f"{city}, {country}".strip(", ") or "In Transit"
+                if i == 0 and loc_str:
+                    current_location = loc_str
+
+                history.append({
+                    "date": f"{act.get('date', '')} {act.get('time', '')}",
+                    "status": act.get("status", {}).get("description", "Status Update"),
+                    "location": loc_str
+                })
 
             return jsonify({
                 "success": True,
                 "status_code": 200,
-                "status": f"Status: {raw_status} (UPS Official)",
-                "current_location": current_loc,
-                "expected_delivery": eta,
-                "received_by": recipient,
+                "status": current_status,
+                "current_location": current_location,
+                "expected_delivery": expected_delivery,
                 "history": history
             }), 200
 
-        # Official carrier network-la illana mattum 404
-        return jsonify({
-            "success": False,
-            "status_code": 404,
-            "message": f"UPS official records: Tracking number '{tracking_number}' has no carrier records found on UPS systems."
-        }), 404
+        elif status_code == 404:
+            return jsonify({"success": False, "status_code": 404, "message": "Package not found in UPS database."}), 404
+        elif status_code == 429:
+            return jsonify({"success": False, "status_code": 429, "message": "UPS API rate limit exceeded."}), 429
+        else:
+            return jsonify({"success": False, "status_code": status_code, "message": f"UPS API returned status {status_code}"}), status_code
 
     except requests.exceptions.RequestException:
-        return jsonify({
-            "success": False,
-            "status_code": 500,
-            "message": "Gateway error connecting to UPS network servers."
-        }), 500
+        return jsonify({"success": False, "status_code": 500, "message": "Failed to reach the UPS API."}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5001)  # port 5001 to avoid conflicts
