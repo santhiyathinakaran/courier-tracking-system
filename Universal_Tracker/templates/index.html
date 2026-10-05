@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPS Tracking - Official Style Live Portal</title>
+  <style>
+    :root {
+      --ups-gold: #ffb500;
+      --ups-dark-brown: #351c15;
+      --ups-accent-brown: #24120c;
+      --bg-dark: #0b0f19;
+      --card-bg: #151d2f;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #232f48;
+      --green: #10b981;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      background: var(--bg-dark); 
+      color: var(--text-main); 
+      margin: 0; 
+      padding: 40px 15px; 
+    }
+
+    .container { 
+      max-width: 720px; 
+      margin: auto; 
+      background: var(--card-bg); 
+      border-radius: 12px; 
+      padding: 30px; 
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6); 
+      border: 1px solid var(--border-color);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid var(--border-color);
+    }
+    .logo-badge {
+      background: var(--ups-gold);
+      color: var(--ups-dark-brown);
+      font-weight: 900;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 20px;
+      letter-spacing: 1px;
+    }
+    .header-text h2 { margin: 0; font-size: 20px; color: var(--text-main); }
+    .header-text p { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+
+    .form-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    input[type="text"] {
+      flex: 1;
+      background: #0d1424;
+      border: 1px solid #2d3d61;
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      text-transform: uppercase;
+    }
+    input[type="text"]:focus {
+      border-color: var(--ups-gold);
+    }
+    button.track-btn {
+      background: var(--ups-gold);
+      color: var(--ups-dark-brown);
+      border: none;
+      border-radius: 8px;
+      padding: 0 26px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.track-btn:hover { background: #e09f00; }
+
+    /* Recent Searches */
+    .recent-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 25px;
+      min-height: 28px;
+    }
+    .recent-title { font-size: 12px; color: var(--text-muted); }
+    .recent-pill {
+      background: #1f2c47;
+      color: #38bdf8;
+      border: 1px solid #33466f;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .recent-pill:hover { background: #2f436d; color: #fff; }
+    .clear-btn {
+      color: var(--red);
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 6px;
+      text-decoration: underline;
+    }
+
+    .loader {
+      display: none;
+      text-align: center;
+      padding: 25px 0;
+      color: var(--ups-gold);
+      font-weight: 600;
+    }
+
+    .result-section {
+      display: none;
+      border-top: 1px solid var(--border-color);
+      padding-top: 25px;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .badge-200 { background: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
+    .badge-err { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; }
+
+    .action-btn {
+      background: #1f2c47;
+      border: 1px solid #33466f;
+      color: #38bdf8;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .action-btn:hover { background: #2d3f66; }
+
+    /* Visual Steps */
+    .progress-track {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin: 25px 0 35px;
+    }
+    .progress-track::before {
+      content: '';
+      position: absolute;
+      top: 13px;
+      left: 8%;
+      right: 8%;
+      height: 3px;
+      background: #232f48;
+      z-index: 1;
+    }
+    .step { text-align: center; position: relative; z-index: 2; flex: 1; }
+    .step-circle {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #1f2c47;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: auto;
+      font-size: 12px;
+      font-weight: bold;
+      border: 2px solid var(--card-bg);
+    }
+    .step-name { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+    .step.completed .step-circle { background: var(--green); color: white; }
+    .step.completed .step-name { color: #34d399; font-weight: 600; }
+    .step.active .step-circle { background: var(--ups-gold); color: var(--ups-dark-brown); }
+    .step.active .step-name { color: var(--ups-gold); font-weight: 700; }
+
+    .summary-card {
+      background: #0d1424;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 25px;
+      border: 1px solid #232f48;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .summary-row:last-child { margin-bottom: 0; }
+    .summary-label { color: var(--text-muted); }
+    .summary-val { font-weight: 600; text-align: right; }
+
+    /* Timeline */
+    .timeline-title { font-size: 15px; color: #cbd5e1; margin-bottom: 15px; }
+    .timeline { list-style: none; padding-left: 0; margin: 0; }
+    .timeline-item {
+      padding-left: 22px;
+      position: relative;
+      margin-bottom: 18px;
+      border-left: 2px solid #232f48;
+      margin-left: 8px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 3px;
+      width: 10px;
+      height: 10px;
+      background: var(--ups-gold);
+      border-radius: 50%;
+    }
+    .timeline-status { font-weight: 600; font-size: 14px; color: #e2e8f0; }
+    .timeline-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="logo-badge">UPS</div>
+    <div class="header-text">
+      <h2>Package Tracking Gateway</h2>
+      <p>United Parcel Service Global Logistics Network</p>
+    </div>
+  </div>
+
+  <form id="trackForm" class="form-box">
+    <input type="text" id="trackInput" placeholder="Enter 18-character UPS ID (e.g., 1Z9999999999999999)">
+    <button type="submit" class="track-btn">Track</button>
+  </form>
+
+  <!-- Recent Tracked IDs -->
+  <div id="recentSection" class="recent-bar" style="display: none;">
+    <span class="recent-title">Recent:</span>
+    <div id="recentChips" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    <span class="clear-btn" onclick="clearRecents()">Clear</span>
+  </div>
+
+  <div id="loader" class="loader">Querying UPS Global Logistics Server... ⏳</div>
+
+  <div id="resultSection" class="result-section">
+    <div class="status-bar">
+      <div id="responseBadge" class="badge"></div>
+      <button type="button" class="action-btn" id="copyBtn" onclick="copyDetails()">📋 Copy Summary</button>
+    </div>
+
+    <!-- 4-Step Progress Bar -->
+    <div id="progressTrack" class="progress-track" style="display: none;">
+      <div class="step" id="st-created">
+        <div class="step-circle">1</div>
+        <div class="step-name">Order Created</div>
+      </div>
+      <div class="step" id="st-transit">
+        <div class="step-circle">2</div>
+        <div class="step-name">In Transit</div>
+      </div>
+      <div class="step" id="st-out">
+        <div class="step-circle">3</div>
+        <div class="step-name">Out for Delivery</div>
+      </div>
+      <div class="step" id="st-delivered">
+        <div class="step-circle">4</div>
+        <div class="step-name">Delivered</div>
+      </div>
+    </div>
+
+    <!-- Summary Details -->
+    <div class="summary-card">
+      <div class="summary-row">
+        <span class="summary-label">Current Status</span>
+        <span class="summary-val" id="dispStatus" style="color: #38bdf8;"></span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Facility Location</span>
+        <span class="summary-val" id="dispLocation" style="color: var(--ups-gold);"></span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Estimated Delivery</span>
+        <span class="summary-val" id="dispDelivery" style="color: var(--green);"></span>
+      </div>
+    </div>
+
+    <!-- Checkpoint Timeline -->
+    <div id="timelineWrap">
+      <div class="timeline-title">Transit Event History</div>
+      <ul id="timelineList" class="timeline"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- 1. Recent Search Persistence ---
+function fetchRecents() {
+  return JSON.parse(localStorage.getItem("ups_recents") || "[]");
+}
+
+function storeRecent(id) {
+  if (!id) return;
+  let recents = fetchRecents().filter(i => i !== id);
+  recents.unshift(id);
+  if (recents.length > 4) recents.pop();
+  localStorage.setItem("ups_recents", JSON.stringify(recents));
+  renderRecents();
+}
+
+function clearRecents() {
+  localStorage.removeItem("ups_recents");
+  renderRecents();
+}
+
+function renderRecents() {
+  const section = document.getElementById("recentSection");
+  const chips = document.getElementById("recentChips");
+  const list = fetchRecents();
+
+  if (list.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "flex";
+  chips.innerHTML = "";
+  list.forEach(item => {
+    const pill = document.createElement("span");
+    pill.className = "recent-pill";
+    pill.innerText = item;
+    pill.onclick = () => {
+      document.getElementById("trackInput").value = item;
+      document.getElementById("trackForm").dispatchEvent(new Event("submit"));
+    };
+    chips.appendChild(pill);
+  });
+}
+
+renderRecents();
+
+// --- 2. Progress Tracker Step Updater ---
+function setProgress(status) {
+  const s = (status || "").toLowerCase();
+  ['st-created', 'st-transit', 'st-out', 'st-delivered'].forEach(id => {
+    document.getElementById(id).className = 'step';
+  });
+
+  const track = document.getElementById("progressTrack");
+  track.style.display = "flex";
+
+  if (s.includes("delivered")) {
+    document.getElementById("st-created").className = "step completed";
+    document.getElementById("st-transit").className = "step completed";
+    document.getElementById("st-out").className = "step completed";
+    document.getElementById("st-delivered").className = "step completed";
+  } else if (s.includes("out for delivery")) {
+    document.getElementById("st-created").className = "step completed";
+    document.getElementById("st-transit").className = "step completed";
+    document.getElementById("st-out").className = "step active";
+  } else if (s.includes("transit") || s.includes("hub") || s.includes("departed") || s.includes("scan")) {
+    document.getElementById("st-created").className = "step completed";
+    document.getElementById("st-transit").className = "step active";
+  } else {
+    document.getElementById("st-created").className = "step active";
+  }
+}
+
+// --- 3. Submit Handler & Asynchronous Call ---
+document.getElementById("trackForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const trackingNumber = document.getElementById("trackInput").value.trim();
+  const loader = document.getElementById("loader");
+  const resultSec = document.getElementById("resultSection");
+  const badge = document.getElementById("responseBadge");
+  const dispStatus = document.getElementById("dispStatus");
+  const dispLocation = document.getElementById("dispLocation");
+  const dispDelivery = document.getElementById("dispDelivery");
+  const timelineList = document.getElementById("timelineList");
+  const progressTrack = document.getElementById("progressTrack");
+
+  loader.style.display = "block";
+  resultSec.style.display = "none";
+  timelineList.innerHTML = "";
+
+  const payload = new FormData();
+  payload.append("tracking_number", trackingNumber);
+
+  try {
+    const res = await fetch("/track", { method: "POST", body: payload });
+    const data = await res.json();
+
+    loader.style.display = "none";
+    resultSec.style.display = "block";
+
+    badge.innerText = `HTTP Response: ${data.status_code}`;
+
+    if (data.success) {
+      badge.className = "badge badge-200";
+      dispStatus.innerText = data.status;
+      dispLocation.innerText = data.current_location;
+      dispDelivery.innerText = data.expected_delivery;
+
+      setProgress(data.status);
+      storeRecent(trackingNumber);
+
+      if (data.history && data.history.length > 0) {
+        data.history.forEach(item => {
+          const li = document.createElement("li");
+          li.className = "timeline-item";
+          li.innerHTML = `<div class="timeline-status">${item.status}</div>
+                          <div class="timeline-sub">📍 ${item.location} | 🕒 ${item.date}</div>`;
+          timelineList.appendChild(li);
+        });
+      }
+    } else {
+      badge.className = "badge badge-err";
+      dispStatus.innerText = data.message;
+      dispLocation.innerText = "N/A";
+      dispDelivery.innerText = "N/A";
+      progressTrack.style.display = "none";
+    }
+  } catch (err) {
+    loader.style.display = "none";
+    resultSec.style.display = "block";
+    badge.className = "badge badge-err";
+    badge.innerText = "HTTP Response: 500";
+    dispStatus.innerText = "Internal Server / Network Handshake Error.";
+    dispLocation.innerText = "N/A";
+    dispDelivery.innerText = "N/A";
+    progressTrack.style.display = "none";
+  }
+});
+
+// --- 4. Copy Summary ---
+function copyDetails() {
+  const trackId = document.getElementById("trackInput").value.trim();
+  const st = document.getElementById("dispStatus").innerText;
+  const loc = document.getElementById("dispLocation").innerText;
+  const eta = document.getElementById("dispDelivery").innerText;
+
+  if (!st || st === "N/A") return;
+
+  const text = `📦 UPS Tracking Update\nID: ${trackId}\nStatus: ${st}\nLocation: ${loc}\nETA: ${eta}`;
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+
+  const btn = document.getElementById("copyBtn");
+  btn.innerText = "✅ Copied!";
+  setTimeout(() => { btn.innerText = "📋 Copy Summary"; }, 2000);
+}
+</script>
+
+</body>
+</html>

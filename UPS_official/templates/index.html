@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Official UPS Developer API Tracker</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1e1b18; color: #f8fafc; margin: 0; padding: 40px 20px; }
+    .card { max-width: 650px; margin: auto; background: #351c15; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+    h2 { color: #ffb500; text-align: center; margin-top: 0; }
+    .subtitle { text-align: center; color: #cbd5e1; font-size: 14px; margin-bottom: 25px; }
+    .form-group { display: flex; gap: 10px; margin-bottom: 25px; }
+    input[type="text"] { flex: 1; padding: 12px 15px; border: 1px solid #6b4e3d; border-radius: 8px; background: #26140e; color: white; font-size: 15px; outline: none; }
+    input[type="text"]:focus { border-color: #ffb500; }
+    button { background: #ffb500; color: #351c15; border: none; padding: 12px 24px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+    button:hover { background: #e0a000; }
+    .loader { text-align: center; color: #ffb500; font-weight: 500; display: none; margin: 20px 0; }
+    .result-box { display: none; border-top: 1px solid #5a3c2b; padding-top: 20px; }
+    .status-badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; margin-bottom: 15px; }
+    .status-200 { background: #065f46; color: #6ee7b7; border: 1px solid #059669; }
+    .status-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; }
+    .info-row { margin: 10px 0; font-size: 15px; }
+    .timeline { list-style: none; padding-left: 0; margin-top: 20px; }
+    .timeline-item { padding-left: 25px; position: relative; margin-bottom: 18px; border-left: 2px solid #5a3c2b; margin-left: 10px; }
+    .timeline-item::before { content: ''; position: absolute; left: -6px; top: 3px; width: 10px; height: 10px; background: #ffb500; border-radius: 50%; }
+    .timeline-item strong { color: #fef08a; font-size: 15px; }
+    .timeline-item small { display: block; color: #cbd5e1; font-size: 13px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📦 Official UPS API Tracker</h2>
+  <div class="subtitle">Direct OAuth 2.0 Integration with UPS Server</div>
+
+  <form id="trackForm" class="form-group">
+    <input type="text" id="trackInput" placeholder="Enter UPS Tracking ID (e.g., 1Z12345E0205271688)" required>
+    <button type="submit">Track Package</button>
+  </form>
+
+  <div id="loader" class="loader">Querying Official UPS Gateway... ⏳</div>
+
+  <div id="resultBox" class="result-box">
+    <div id="badge" class="status-badge"></div>
+    <div class="info-row"><strong>Status:</strong> <span id="currentStatus" style="color:#ffb500;"></span></div>
+    <div class="info-row"><strong>Current Facility:</strong> <span id="currentLocation" style="color:#67e8f9;"></span></div>
+    <div class="info-row"><strong>📅 Estimated Delivery:</strong> <span id="expectedDelivery" style="color:#86efac; font-weight:bold;"></span></div>
+    
+    <div id="timelineContainer" style="margin-top:20px;">
+      <h4 style="color:#fed7aa; margin-bottom:10px;">Official Activity Checkpoints:</h4>
+      <ul id="timelineList" class="timeline"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById("trackForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const trackingNumber = document.getElementById("trackInput").value.trim();
+  const loader = document.getElementById("loader");
+  const resultBox = document.getElementById("resultBox");
+  const badge = document.getElementById("badge");
+  const currentStatus = document.getElementById("currentStatus");
+  const currentLocation = document.getElementById("currentLocation");
+  const expectedDelivery = document.getElementById("expectedDelivery");
+  const timelineList = document.getElementById("timelineList");
+
+  loader.style.display = "block";
+  resultBox.style.display = "none";
+  timelineList.innerHTML = "";
+
+  const formData = new FormData();
+  formData.append("tracking_number", trackingNumber);
+
+  try {
+    const res = await fetch("/track", { method: "POST", body: formData });
+    const data = await res.json();
+    loader.style.display = "none";
+    resultBox.style.display = "block";
+
+    badge.innerText = `HTTP Status: ${data.status_code}`;
+
+    if (data.success) {
+      badge.className = "status-badge status-200";
+      currentStatus.innerText = data.status;
+      currentLocation.innerText = data.current_location;
+      expectedDelivery.innerText = data.expected_delivery;
+
+      if (data.history && data.history.length > 0) {
+        data.history.forEach(item => {
+          const li = document.createElement("li");
+          li.className = "timeline-item";
+          li.innerHTML = `<strong>${item.status}</strong><small>📍 ${item.location} | 🕒 ${item.date}</small>`;
+          timelineList.appendChild(li);
+        });
+      } else {
+        timelineList.innerHTML = "<li style='color:#cbd5e1;'>Package registered. Awaiting facility updates.</li>";
+      }
+    } else {
+      badge.className = "status-badge status-error";
+      currentStatus.innerText = data.message;
+      currentLocation.innerText = "N/A";
+      expectedDelivery.innerText = "N/A";
+    }
+  } catch (err) {
+    loader.style.display = "none";
+    resultBox.style.display = "block";
+    badge.className = "status-badge status-error";
+    badge.innerText = "HTTP Status: 500";
+    currentStatus.innerText = "Error communicating with server.";
+    currentLocation.innerText = "N/A";
+    expectedDelivery.innerText = "N/A";
+  }
+});
+</script>
+
+</body>
+</html>
